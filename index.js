@@ -46,6 +46,13 @@ io.on('connection', (socket) => {
       io.emit('update-players', players);
     }
   });
+  
+  socket.on('chat-message', (data) => {
+    io.emit('chat-message', {
+      player: data.player,
+      message: data.message
+    });
+  });
 
   // Handle disconnects
   socket.on('disconnect', () => {
