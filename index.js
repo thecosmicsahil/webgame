@@ -1,98 +1,72 @@
 const express = require('express');
 const http = require('http');
 const { Server } = require('socket.io');
-const path = require('path');
+const cors = require('cors');
 
 const app = express();
+app.use(cors());
 const server = http.createServer(app);
+
 const io = new Server(server, {
   cors: {
     origin: "https://saya17.vercel.app",
-    methods: ["GET", "POST"],
-    credentials: true
+    methods: ["GET", "POST"]
   }
 });
 
-// Game state
-const gameState = {
-  players: {},
-  waiter: { x: 10, y: 3 },
-  chatMessages: {},
-  mapSize: { width: 20, height: 15 }
-};
-
-// Serve static files
-app.use(express.static(path.join(__dirname, 'public')));
-
-app.get('/', (req, res) => {
-  res.sendFile(path.join(__dirname, 'public', 'index.html'));
-});
+let players = {};
 
 io.on('connection', (socket) => {
   console.log('New connection:', socket.id);
 
-  // Send initial game state
-  socket.emit('initial-state', {
-    state: gameState,
-    playerId: socket.id
-  });
+  // Send current players to new connection
+  socket.emit('update-players', players);
 
-  // Player join handler
-  socket.on('player-join', (playerData) => {
-    gameState.players[socket.id] = {
+  // Handle player joining game
+  socket.on('player-join', (data) => {
+    players[socket.id] = {
       id: socket.id,
-      character: playerData.character,
-      x: playerData.x,
-      y: playerData.y,
-      item: null
+      character: data.character,
+      x: data.x,
+      y: data.y,
+      food: null,
+      lastUpdated: Date.now()
     };
-    broadcastGameState();
+    io.emit('update-players', players);
   });
 
-  // Player movement handler
-  socket.on('player-move', (newPos) => {
-    if (gameState.players[socket.id]) {
-      // Validate movement within map bounds
-      newPos.x = Math.max(0, Math.min(gameState.mapSize.width - 1, newPos.x));
-      newPos.y = Math.max(0, Math.min(gameState.mapSize.height - 1, newPos.y));
-      
-      gameState.players[socket.id].x = newPos.x;
-      gameState.players[socket.id].y = newPos.y;
-      broadcastGameState();
+  // Handle player movement
+  socket.on('player-move', (data) => {
+    if (players[socket.id]) {
+      players[socket.id].x = data.x;
+      players[socket.id].y = data.y;
+      players[socket.id].lastUpdated = Date.now();
+      io.emit('update-players', players);
     }
   });
 
-  // Chat message handler
-  socket.on('chat-message', ({ playerId, message }) => {
-    gameState.chatMessages[playerId] = message.substring(0, 30);
-    io.emit('chat-message', { playerId, message: gameState.chatMessages[playerId] });
-    
-    // Clear message after 3 seconds
-    setTimeout(() => {
-      delete gameState.chatMessages[playerId];
-      io.emit('chat-remove', playerId);
-    }, 3000);
-  });
-
-  // Order selection handler
-  socket.on('select-order', ({ playerId, item }) => {
-    if (gameState.players[playerId]) {
-      gameState.players[playerId].item = item;
-      broadcastGameState();
+  // Handle food orders
+  socket.on('select-order', (data) => {
+    if (players[socket.id]) {
+      players[socket.id].food = data.food;
+      io.emit('update-players', players);
     }
   });
 
-  // Disconnect handler
+  // Handle chat messages
+  socket.on('chat-message', (data) => {
+    io.emit('chat-message', {
+      player: players[socket.id].character,
+      message: data.message
+    });
+  });
+
+  // Handle disconnection
   socket.on('disconnect', () => {
-    delete gameState.players[socket.id];
-    delete gameState.chatMessages[socket.id];
-    broadcastGameState();
-    console.log('User disconnected:', socket.id);
+    delete players[socket.id];
+    io.emit('update-players', players);
+    console.log('Disconnected:', socket.id);
   });
-
-  function broadcastGameState() {
-    io.emit('update-state', gameState);
-  }
 });
 
 const PORT = process.env.PORT || 3000;
