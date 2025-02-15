@@ -9,7 +9,7 @@ const server = http.createServer(app);
 
 const io = new Server(server, {
   cors: {
-    origin: "https://saya17.vercel.app",
+    origin: "https://www.sahilarya.shop/",
     methods: ["GET", "POST"]
   }
 });
