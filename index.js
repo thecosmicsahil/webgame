@@ -35,6 +35,10 @@ io.on('connection', (socket) => {
     io.emit('update-players', players);
   });
 
+  socket.on('update-food', (updatedPlayer) => {
+    players[updatedPlayer.id] = updatedPlayer;
+  });  
+
   // Handle player movement
   socket.on('player-move', (data) => {
     if (players[socket.id]) {
@@ -60,6 +64,14 @@ io.on('connection', (socket) => {
       message: data.message
     });
   });
+
+  socket.on('eat-food', ({ character }) => {
+    const player = getPlayerByCharacter(character); // Implement your player lookup
+    if (player) {
+      player.food = null;
+      io.emit('update-food', player); // Broadcast updated player state
+    }
+  });  
 
   // Handle disconnection
   socket.on('disconnect', () => {
