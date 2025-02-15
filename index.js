@@ -13,7 +13,7 @@ app.use(express.static(path.join(__dirname, 'public')));
 const httpServer = createServer(app);
 const io = new Server(httpServer, {
   cors: {
-    origin: ["https://saya17.vercel.app"], // Your Vercel URL
+    origin: ["https://saya17.vercel.app"], // Replace with your Vercel URL or use "*" for all origins
     methods: ["GET", "POST"]
   }
 });
@@ -54,10 +54,8 @@ io.on('connection', (socket) => {
 
   // Handle chat messages
   socket.on('chat-message', (data) => {
-    io.emit('chat-message', {
-      player: data.player,
-      message: data.message
-    });
+    console.log('Received chat message:', data);
+    io.emit('chat-message', data);
   });
 
   // Handle disconnects
