@@ -13,15 +13,13 @@ const io = new Server(httpServer, {
   }
 });
 
-// Game constants
-const MAP_WIDTH = 320;
-const MAP_HEIGHT = 180;
-const PLAYER_SPEED = 2;
-const PLAYER_SIZE = 16;
-
 // Game state
 let players = {};
-let chatMessages = {};
+const foodMenu = {
+  '🍕 Pizza': 10,
+  '🍷 Wine': 15,
+  '🍰 Dessert': 8
+};
 
 io.on('connection', (socket) => {
   console.log('Player connected:', socket.id);
@@ -31,74 +29,70 @@ io.on('connection', (socket) => {
     players[socket.id] = {
       id: socket.id,
       name: playerData.name.substring(0, 12),
-      color: playerData.color || '#ff69b4',
-      x: MAP_WIDTH/2 - PLAYER_SIZE/2,
-      y: MAP_HEIGHT - PLAYER_SIZE*2,
-      velocityX: 0,
-      direction: 1,
-      lastChat: 0,
-      currentMessage: ''
+      type: playerData.type,
+      x: playerData.x,
+      y: playerData.y,
+      message: null,
+      food: null,
+      lastChat: Date.now(),
+      color: playerData.type === 'sahil' ? '#6b8cff' : '#ff6b8c'
     };
     
-    io.emit('update', players);
+    io.emit('players-update', players);
   });
 
   // Handle player movement
-  socket.on('move', (direction) => {
+  socket.on('move', (posData) => {
     if (!players[socket.id]) return;
-
-    const player = players[socket.id];
-    player.velocityX = direction * PLAYER_SPEED;
     
-    // Update direction for sprite orientation
-    if (direction !== 0) {
-      player.direction = direction;
-    }
+    const player = players[socket.id];
+    player.x = posData.x;
+    player.y = posData.y;
+    
+    io.emit('players-update', players);
   });
 
   // Handle chat messages
-  socket.on('chat', (message) => {
+  socket.on('chat', (messageData) => {
     if (!players[socket.id]) return;
     
     const player = players[socket.id];
     const now = Date.now();
     
-    // Prevent spamming
+    // Prevent spamming (3 second cooldown)
     if (now - player.lastChat < 3000) return;
     
     player.lastChat = now;
-    player.currentMessage = message.substring(0, 30);
-    io.emit('chat', { id: socket.id, message: player.currentMessage });
+    player.message = {
+      text: messageData.message.text.substring(0, 30),
+      timestamp: now
+    };
+    
+    io.emit('chat', player);
+    io.emit('players-update', players);
+  });
+
+  // Handle food orders
+  socket.on('order', (item) => {
+    if (!players[socket.id] || !foodMenu[item]) return;
+    
+    const player = players[socket.id];
+    player.food = {
+      item: item,
+      price: foodMenu[item],
+      timestamp: Date.now()
+    };
+    
+    io.emit('order-update', player);
+    io.emit('players-update', players);
   });
 
   // Handle disconnects
   socket.on('disconnect', () => {
     delete players[socket.id];
-    io.emit('update', players);
+    io.emit('players-update', players);
   });
 });
-
-// Game loop
-setInterval(() => {
-  const now = Date.now();
-  
-  // Update player positions
-  Object.values(players).forEach(player => {
-    // Apply movement
-    player.x += player.velocityX;
-    
-    // Keep within map bounds
-    player.x = Math.max(0, Math.min(MAP_WIDTH - PLAYER_SIZE, player.x));
-    
-    // Clear old chat messages
-    if (now - player.lastChat > 3000) {
-      player.currentMessage = '';
-    }
-  });
-
-  // Broadcast game state
-  io.emit('update', players);
-}, 1000/60);
 
 const PORT = process.env.PORT || 3001;
 httpServer.listen(PORT, () => {
