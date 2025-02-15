@@ -2,9 +2,14 @@ const express = require('express');
 const { createServer } = require('http');
 const { Server } = require('socket.io');
 const cors = require('cors');
+const path = require('path');
 
 const app = express();
 app.use(cors());
+
+// Serve static files from the "public" directory
+app.use(express.static(path.join(__dirname, 'public')));
+
 const httpServer = createServer(app);
 const io = new Server(httpServer, {
   cors: {
@@ -24,8 +29,8 @@ io.on('connection', (socket) => {
     players[socket.id] = {
       ...playerData,
       id: socket.id,
-      x: 400,
-      y: 300
+      x: 0.5, // Normalized position
+      y: 0.5  // Normalized position
     };
     io.emit('update-players', players);
   });
@@ -46,7 +51,8 @@ io.on('connection', (socket) => {
       io.emit('update-players', players);
     }
   });
-  
+
+  // Handle chat messages
   socket.on('chat-message', (data) => {
     io.emit('chat-message', {
       player: data.player,
@@ -56,6 +62,7 @@ io.on('connection', (socket) => {
 
   // Handle disconnects
   socket.on('disconnect', () => {
+    console.log('Player disconnected:', socket.id);
     delete players[socket.id];
     io.emit('update-players', players);
   });
